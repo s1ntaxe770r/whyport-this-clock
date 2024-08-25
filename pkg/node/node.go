@@ -5,6 +5,7 @@ import (
 	"github.com/teris-io/shortid"
 	"log/slog"
 	"os"
+	"sync"
 )
 
 // ensure the service  struct implements the Node interface
@@ -22,25 +23,32 @@ type Node interface {
 	ID() string
 }
 
-type Service struct {
-	Name   string
-	Id     string
-	logger *slog.Logger
-	// TODO: all services should have a shared channel for message passing
-
-	// Each Service gets a lamport Clock
-	Clock clock.LamportClock
+type Message struct {
+	SenderID  string
+	Timestamp int32
+	Content   string
 }
 
-func NewService(name string) *Service {
-	sid, _ := shortid.New(1, shortid.DefaultABC, 2342)
+type Service struct {
+	Name        string
+	Id          string
+	logger      *slog.Logger
+	MessageChan chan Message
+	// Each Service gets a lamport Clock
+	Clock  clock.LamportClock
+	mutext sync.RWMutex
+}
+
+func NewService(name string, messageChan chan Message) *Service {
+	sid, _ := shortid.Generate()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{}))
 
 	return &Service{
-		Name:   name,
-		Id:     sid.String(),
-		logger: logger,
-		Clock:  clock.LamportClock{},
+		Name:        name,
+		Id:          sid,
+		logger:      logger,
+		Clock:       clock.LamportClock{},
+		MessageChan: messageChan,
 	}
 
 }
@@ -48,7 +56,18 @@ func NewService(name string) *Service {
 func (s *Service) Send(CurrentTimestamp int32) int32 {
 	// Increment counter
 	s.Clock.Local()
-	//TODO: Send message over channel
+
+	msg := Message{
+		SenderID:  s.Id,
+		Timestamp: s.Clock.CurrentTimestamp(),
+		Content:   "HI LESLIE!!!",
+	}
+
+	s.mutext.Lock()
+	s.MessageChan <- msg
+	s.mutext.Unlock()
+
+	s.logger.Info("sent message", "Timestamp", msg.Timestamp, "Content", msg.Content)
 	return s.Clock.CurrentTimestamp()
 }
 
@@ -58,5 +77,14 @@ func (s *Service) Receive(event clock.Event, timestamp int32) {
 
 func (s *Service) ID() string {
 	return s.Id
+
+}
+
+func (s *Service) HandleMessages() {
+	s.logger.Info("Starting message handler")
+	for msg := range s.MessageChan {
+		s.Receive(clock.Received, msg.Timestamp)
+		s.logger.Info("Received Message", "from", msg.SenderID, "timestamp", msg.Timestamp, "Content", msg.Content)
+	}
 
 }
