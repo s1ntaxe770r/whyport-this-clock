@@ -21,7 +21,8 @@ type LamportClock struct {
 // Tick when an Event occurs
 func (lc *LamportClock) Tick(currentCLock int32) {
 	currentTime := max(lc.counter.Load(), currentCLock) + 1
-	lc.counter.Add(currentTime)
+	lc.counter.Store(currentTime)
+
 }
 
 func (lc *LamportClock) Local() {

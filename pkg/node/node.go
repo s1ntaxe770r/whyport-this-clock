@@ -1,9 +1,10 @@
 package node
 
 import (
-	"log/slog"
-
 	"github.com/s1ntaxe770r/lamport/pkg/clock"
+	"github.com/teris-io/shortid"
+	"log/slog"
+	"os"
 )
 
 // ensure the service  struct implements the Node interface
@@ -13,7 +14,7 @@ var _ Node = &Service{}
 type Node interface {
 
 	// Send a message and return the resulting timestamp
-	Send(currentClock string) int32
+	Send(CurrentTimestamp int32) int32
 	// Receive a message
 	Receive(event clock.Event, timestamp int32)
 
@@ -27,25 +28,35 @@ type Service struct {
 	logger *slog.Logger
 	// TODO: all services should have a shared channel for message passing
 
-	// Each Service gets a lamport clock
-	clock clock.LamportClock
+	// Each Service gets a lamport Clock
+	Clock clock.LamportClock
 }
 
-func (s *Service) Send(currentClock string) int32 {
+func NewService(name string) *Service {
+	sid, _ := shortid.New(1, shortid.DefaultABC, 2342)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{}))
+
+	return &Service{
+		Name:   name,
+		Id:     sid.String(),
+		logger: logger,
+		Clock:  clock.LamportClock{},
+	}
+
+}
+
+func (s *Service) Send(CurrentTimestamp int32) int32 {
 	// Increment counter
-	s.clock.Tick(s.clock.CurrentTimestamp())
-
+	s.Clock.Local()
 	//TODO: Send message over channel
-
-	return s.clock.CurrentTimestamp()
+	return s.Clock.CurrentTimestamp()
 }
 
 func (s *Service) Receive(event clock.Event, timestamp int32) {
-	s.clock.Tick(timestamp)
+	s.Clock.Tick(timestamp)
 }
 
 func (s *Service) ID() string {
-
 	return s.Id
 
 }
