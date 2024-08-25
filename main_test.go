@@ -1,16 +1,16 @@
 package main_test
 
 import (
-	"testing"
-
 	"github.com/s1ntaxe770r/lamport/pkg/clock"
 	"github.com/s1ntaxe770r/lamport/pkg/node"
 	"github.com/stretchr/testify/assert"
+	"testing"
+	"time"
 )
 
 func TestSingleTick(t *testing.T) {
-
-	OrderService := node.NewService("OrderService")
+	messageChan := make(chan node.Message, 100)
+	OrderService := node.NewService("OrderService", messageChan)
 
 	OrderService.Receive(clock.Received, OrderService.Clock.CurrentTimestamp())
 
@@ -19,11 +19,17 @@ func TestSingleTick(t *testing.T) {
 }
 
 func TestSend(t *testing.T) {
+	messageChan := make(chan node.Message, 100)
 
-	PaymentService := node.NewService("PaymentService")
+	OrderService := node.NewService("OrderService", messageChan)
+	go OrderService.HandleMessages()
 
-	CurrentTimestamp := PaymentService.Send(PaymentService.Clock.CurrentTimestamp())
-	PaymentService.Receive(clock.Received, CurrentTimestamp)
+	PaymentService := node.NewService("PaymentService", messageChan)
+	CurrentTimestamp := PaymentService.Clock.CurrentTimestamp()
+	PaymentService.Send(CurrentTimestamp)
 
-	assert.Equal(t, 2, int(PaymentService.Clock.CurrentTimestamp()))
+	// Give some time for the message to be processed
+	time.Sleep(100 * time.Millisecond)
+
+	assert.Equal(t, 2, int(OrderService.Clock.CurrentTimestamp()))
 }
